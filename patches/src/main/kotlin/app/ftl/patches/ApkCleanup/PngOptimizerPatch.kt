@@ -8,7 +8,6 @@ import java.util.logging.Logger
 import java.util.zip.CRC32
 import java.util.zip.Deflater
 import java.util.zip.Inflater
-import java.util.logging.Logger
 
 private val PNG_SIGNATURE = byteArrayOf(
     0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(),
