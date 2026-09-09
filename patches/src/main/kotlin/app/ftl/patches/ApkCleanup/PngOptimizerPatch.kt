@@ -9,6 +9,8 @@ import java.util.zip.CRC32
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 
+private val logger = Logger.getLogger("PngOptimizerPatch")
+
 private val PNG_SIGNATURE = byteArrayOf(
     0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(),
     0x0D, 0x0A, 0x1A, 0x0A,
@@ -173,7 +175,6 @@ val pngOptimizerPatch = resourcePatch(
     default = false,
 ) {
     execute {
-        val logger = Logger.getLogger(this::class.java.name)
         val roots = listOf("res", "assets")
             .map { get(it, false) }
             .filter { it.isDirectory }
