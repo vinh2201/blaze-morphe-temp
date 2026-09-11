@@ -125,14 +125,14 @@ val apkCleanupPatch = rawResourcePatch(
         
         try {
             if (manifestFile.isFile) {
-                // Đọc toàn bộ nội dung file AXML dưới dạng chuỗi UTF-8 (String Pool vẫn giữ nguyên dạng text thuần)
-                val manifestContent = manifestFile.readBytes().toString(Charsets.UTF_8)
-                for (pkg in PACKAGE_NAME) {
-                    // Kiểm tra xem package name có nằm trong String Pool của binary manifest không
-                    if (manifestContent.contains(pkg)) {
+                val manifestContent = manifestFile.readText(Charsets.UTF_8)
+                // Bắt chính xác package name từ thuộc tính package="..." của thẻ manifest
+                val packageRegex = Regex("""package\s*=\s*["']([^"']+)["']""")
+                val match = packageRegex.find(manifestContent)
+                if (match != null) {
+                    detectedPackage = match.groupValues[1]
+                    if (PACKAGE_NAME.contains(detectedPackage)) {
                         isExcludedApp = true
-                        detectedPackage = pkg
-                        break
                     }
                 }
             }
@@ -143,7 +143,7 @@ val apkCleanupPatch = rawResourcePatch(
         if (isExcludedApp) {
             logger.info("APK Cleanup: Detected protected package ($detectedPackage). Applying EXCLUDED_ROOT_CALLS and src/ protection rules.")
         } else {
-            logger.info("APK Cleanup: No protected package matched. Running standard cleanup.")
+            logger.info("APK Cleanup: Detected package: $detectedPackage. No protected package matched. Running standard cleanup.")
         }
 
         var removedFiles = 0
