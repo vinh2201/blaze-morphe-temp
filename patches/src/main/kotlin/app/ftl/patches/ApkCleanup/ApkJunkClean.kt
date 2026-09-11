@@ -49,7 +49,6 @@ private val JUNK_PATTERNS = listOf(
 
 private val EXCLUDED_PREFIXES = listOf("assets/", "res/")
 
-// === DANH SÁCH THÊM MỚI TỪ REVANCED ===
 private val JUNK_DIRECTORY_PREFIXES = listOf(
     "assets/dexopt/",
     "com/clevertap/",
@@ -90,7 +89,6 @@ private val EXCLUDED_ROOT_CALLS = listOf(
 private val PACKAGE_NAME = listOf(
     "com.viber.voip", "com.facebook.orca", "com.whatsapp", "com.zing.zalo"
 )
-// ========================================
 
 val apkCleanupPatch = rawResourcePatch(
     name = "APK Junk Cleanup",
@@ -101,7 +99,7 @@ val apkCleanupPatch = rawResourcePatch(
         key = "splitByArch",
         default = false,
         title = "Keep Only One Architecture",
-        description = "Keep native libraries (.so files) for only one CPU architecture. To generate separate APKs for each architecture, run this patch multiple times with a different architecture selected each time.",
+        description = "Keep native libraries (.so files) for only one CPU architecture.",
     )
 
     val targetArch by stringOption(
@@ -122,7 +120,6 @@ val apkCleanupPatch = rawResourcePatch(
         val manifestFile = get("AndroidManifest.xml")
         val apkRoot = manifestFile.parentFile ?: File(".")
 
-        // === THÊM LOGIC CHECK MANIFEST ĐỂ XÁC ĐỊNH PACKAGE ===
         var isExcludedApp = false
         var detectedPackage = "unknown"
         
@@ -151,12 +148,10 @@ val apkCleanupPatch = rawResourcePatch(
         if (isExcludedApp) {
             logger.info("APK Cleanup: Detected protected package ($detectedPackage). Applying EXCLUDED_ROOT_CALLS and src/ protection rules.")
         }
-        // ======================================================
 
         var removedFiles = 0
         var freedBytes = 0L
 
-        // Nâng cấp hàm isProtected: thêm logic chặn EXCLUDED_ROOT_CALLS và thư mục src/
         fun isProtected(relativePath: String): Boolean {
             if (PROTECTED_PATTERNS.any { it.matches(relativePath) }) return true
             if (isExcludedApp) {
@@ -180,11 +175,7 @@ val apkCleanupPatch = rawResourcePatch(
                     removedFiles++
                     freedBytes += size
                     logger.fine("Removed: $path (${size}B)")
-                } else {
-                    logger.warning("APK Cleanup: failed to delete $path")
                 }
-            } else {
-                logger.info("APK Cleanup: $path -> neither file nor directory")
             }
         }
 
@@ -192,7 +183,8 @@ val apkCleanupPatch = rawResourcePatch(
             .filter { it.isFile }
             .toList()
             .forEach { file ->
-                val relativePath = file.relativeTo(apkRoot).path.replace("\\", "/")
+                // === BẢN VÁ Ở ĐÂY: Loại bỏ chữ "root/" để path được sạch ===
+                val relativePath = file.relativeTo(apkRoot).path.replace("\\", "/").removePrefix("root/")
 
                 if (isProtected(relativePath)) return@forEach
                 if (EXCLUDED_PREFIXES.any { relativePath.startsWith(it) }) return@forEach
@@ -219,16 +211,13 @@ val apkCleanupPatch = rawResourcePatch(
             logger.severe("APK Cleanup: failed removing assets/audience_network.dex: ${e.message}")
         }
 
-        // === THÊM LOGIC XÓA JUNK_DIRECTORY_PREFIXES ===
         JUNK_DIRECTORY_PREFIXES.forEach { prefix ->
             try {
-                // Xóa slash ở cuối để tránh lỗi đường dẫn khi nạp vào removeTree
                 removeTree(prefix.removeSuffix("/"))
             } catch (e: Exception) {
                 logger.warning("APK Cleanup: failed removing $prefix: ${e.message}")
             }
         }
-        // ===============================================
 
         try {
             val metaInf = get("META-INF")
