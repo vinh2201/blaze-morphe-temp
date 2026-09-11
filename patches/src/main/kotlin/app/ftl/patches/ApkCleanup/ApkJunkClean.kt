@@ -91,7 +91,6 @@ private val EXCLUDED_ROOT_CALLS = listOf(
     "root/androidannotations-api.properties",
     "root/jetty-dir.css"
 )
-)
 
 private val PACKAGE_NAME = listOf(
     "com.viber.voip", "com.facebook.orca", "com.whatsapp", "com.zing.zalo"
