@@ -65,31 +65,32 @@ private val JUNK_DIRECTORY_PREFIXES = listOf(
 
 private val EXCLUDED_ROOT_CALLS = listOf(
     // === NHÓM GOOGLE PLAY SERVICES ===
-    "play-services-auth.properties",
-    "play-services-auth-api-phone.properties",
-    "play-services-auth-base.properties",
-    "play-services-base.properties",
-    "play-services-cloud-messaging.properties",
-    "play-services-gcm.properties",
-    "play-services-tasks.properties",
+    "root/play-services-auth.properties",
+    "root/play-services-auth-api-phone.properties",
+    "root/play-services-auth-base.properties",
+    "root/play-services-base.properties",
+    "root/play-services-cloud-messaging.properties",
+    "root/play-services-gcm.properties",
+    "root/play-services-tasks.properties",
 
     // === NHÓM FIREBASE ===
-    "firebase-auth.properties",
-    "firebase-auth-interop.properties",
-    "firebase-common.properties",
-    "firebase-components.properties",
-    "firebase-core.properties",
-    "firebase-database.properties",
-    "firebase-datatransport.properties",
-    "firebase-inappmessaging.properties",
-    "firebase-inappmessaging-display.properties",
-    "firebase-messaging.properties",
+    "root/firebase-auth.properties",
+    "root/firebase-auth-interop.properties",
+    "root/firebase-common.properties",
+    "root/firebase-components.properties",
+    "root/firebase-core.properties",
+    "root/firebase-database.properties",
+    "root/firebase-datatransport.properties",
+    "root/firebase-inappmessaging.properties",
+    "root/firebase-inappmessaging-display.properties",
+    "root/firebase-messaging.properties",
 
     // === NHÓM KHÁC ===
-    "core-common.properties",
-    "META-INF/androidx.compose.ui_ui.version",
-    "androidannotations-api.properties",
-    "jetty-dir.css"
+    "root/core-common.properties",
+    "root/META-INF/androidx.compose.ui_ui.version",
+    "root/androidannotations-api.properties",
+    "root/jetty-dir.css"
+)
 )
 
 private val PACKAGE_NAME = listOf(
@@ -157,7 +158,7 @@ val apkCleanupPatch = rawResourcePatch(
         }
 
         if (isExcludedApp) {
-            logger.info("APK Cleanup: Detected protected package ($detectedPackage). Applying EXCLUDED_ROOT_CALLS rules.")
+            logger.info("APK Cleanup: Detected protected package ($detectedPackage). Applying EXCLUDED_ROOT_CALLS and src/ protection rules.")
         }
         // ==============================================
 
@@ -167,8 +168,8 @@ val apkCleanupPatch = rawResourcePatch(
         fun isProtected(relativePath: String) = PROTECTED_PATTERNS.any { it.matches(relativePath) }
 
         fun removeTree(path: String) {
-            // Chốt chặn ngay cửa: Nếu app thuộc diện bảo kê và file/folder nằm trong list thì cấm xoá
-            if (isExcludedApp && EXCLUDED_ROOT_CALLS.contains(path)) return
+            // Chốt chặn ngay cửa: Nếu app thuộc diện bảo kê và nằm trong list hoặc thuộc thư mục src/ thì cấm xoá
+            if (isExcludedApp && (EXCLUDED_ROOT_CALLS.contains(path) || path.startsWith("src/"))) return
 
             val entry = get(path) // java.io.File
             if (entry.isDirectory) {
@@ -180,7 +181,7 @@ val apkCleanupPatch = rawResourcePatch(
                 if (isProtected(path)) return
                 
                 // Chốt chặn cho file con bên trong phòng hờ
-                if (isExcludedApp && EXCLUDED_ROOT_CALLS.any { path.endsWith(it) }) return
+                if (isExcludedApp && (EXCLUDED_ROOT_CALLS.any { path.endsWith(it) } || path.startsWith("src/"))) return
 
                 val size = entry.length()
                 if (entry.delete()) {
@@ -205,8 +206,8 @@ val apkCleanupPatch = rawResourcePatch(
                 if (isProtected(relativePath)) return@forEach
                 if (EXCLUDED_PREFIXES.any { relativePath.startsWith(it) }) return@forEach
                 
-                // Áp dụng luật bảo kê cho file khi quét tự động
-                if (isExcludedApp && EXCLUDED_ROOT_CALLS.contains(relativePath)) return@forEach
+                // Áp dụng luật bảo kê cho file khi quét tự động (bao gồm cả các file trong src/ nếu là app bảo kê)
+                if (isExcludedApp && (EXCLUDED_ROOT_CALLS.contains(relativePath) || relativePath.startsWith("src/"))) return@forEach
 
                 if (JUNK_PATTERNS.any { it.matches(relativePath) }) {
                     val size = file.length()
