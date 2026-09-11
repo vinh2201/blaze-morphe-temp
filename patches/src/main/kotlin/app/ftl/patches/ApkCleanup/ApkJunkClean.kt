@@ -45,59 +45,52 @@ private val JUNK_PATTERNS = listOf(
     Regex(""".*licenses\.md$"""),
     Regex(""".*debug\.keystore$"""),
     Regex(""".*_trackers\.xml$"""),
-    Regex(""".*version\.properties$"""),
-    Regex(""".*integrity\.properties$"""),
-    Regex(""".*androidannotations-api\.properties$"""),
-    Regex(""".*transport-.*\.properties$"""),
-    Regex(""".*jetty-dir\.css$"""),
-    // ART baseline profiles (also catches APKs that ship them outside assets/dexopt/)
-    Regex(""".*(?:^|/)baseline\.profm?$"""),
 )
 
-// === THÊM DANH SÁCH BẮN TỈA TỪ REVANCED SANG ===
+private val EXCLUDED_PREFIXES = listOf("assets/", "res/")
+
+// === DANH SÁCH THÊM MỚI TỪ REVANCED ===
 private val JUNK_DIRECTORY_PREFIXES = listOf(
-    "assets/dexopt",
-    "com/clevertap",
-    "org/jacoco",
-    "org/joda",
-    "services",
+    "assets/dexopt/",
+    "com/clevertap/",
+    "org/jacoco/",
+    "org/joda/",
+    "services/",
 )
 
 private val EXCLUDED_ROOT_CALLS = listOf(
     // === NHÓM GOOGLE PLAY SERVICES ===
-    "root/play-services-auth.properties",
-    "root/play-services-auth-api-phone.properties",
-    "root/play-services-auth-base.properties",
-    "root/play-services-base.properties",
-    "root/play-services-cloud-messaging.properties",
-    "root/play-services-gcm.properties",
-    "root/play-services-tasks.properties",
+    "play-services-auth.properties",
+    "play-services-auth-api-phone.properties",
+    "play-services-auth-base.properties",
+    "play-services-base.properties",
+    "play-services-cloud-messaging.properties",
+    "play-services-gcm.properties",
+    "play-services-tasks.properties",
 
     // === NHÓM FIREBASE ===
-    "root/firebase-auth.properties",
-    "root/firebase-auth-interop.properties",
-    "root/firebase-common.properties",
-    "root/firebase-components.properties",
-    "root/firebase-core.properties",
-    "root/firebase-database.properties",
-    "root/firebase-datatransport.properties",
-    "root/firebase-inappmessaging.properties",
-    "root/firebase-inappmessaging-display.properties",
-    "root/firebase-messaging.properties",
+    "firebase-auth.properties",
+    "firebase-auth-interop.properties",
+    "firebase-common.properties",
+    "firebase-components.properties",
+    "firebase-core.properties",
+    "firebase-database.properties",
+    "firebase-datatransport.properties",
+    "firebase-inappmessaging.properties",
+    "firebase-inappmessaging-display.properties",
+    "firebase-messaging.properties",
 
     // === NHÓM KHÁC ===
-    "root/core-common.properties",
-    "root/META-INF/androidx.compose.ui_ui.version",
-    "root/androidannotations-api.properties",
-    "root/jetty-dir.css"
+    "core-common.properties",
+    "META-INF/androidx.compose.ui_ui.version",
+    "androidannotations-api.properties",
+    "jetty-dir.css"
 )
 
 private val PACKAGE_NAME = listOf(
     "com.viber.voip", "com.facebook.orca", "com.whatsapp", "com.zing.zalo"
 )
-// ==================================================
-
-private val EXCLUDED_PREFIXES = listOf("res/")
+// ========================================
 
 val apkCleanupPatch = rawResourcePatch(
     name = "APK Junk Cleanup",
@@ -129,16 +122,15 @@ val apkCleanupPatch = rawResourcePatch(
         val manifestFile = get("AndroidManifest.xml")
         val apkRoot = manifestFile.parentFile ?: File(".")
 
-        // === LOGIC KIỂM TRA PACKAGE AN TOÀN TUYỆT ĐỐI ===
+        // === THÊM LOGIC CHECK MANIFEST ĐỂ XÁC ĐỊNH PACKAGE ===
         var isExcludedApp = false
         var detectedPackage = "unknown"
-
+        
         try {
             if (manifestFile.isFile) {
                 val rawBytes = manifestFile.readBytes()
                 val strUtf8 = String(rawBytes, Charsets.UTF_8)
                 val text = if (strUtf8.contains("<manifest")) strUtf8 else String(rawBytes, Charsets.UTF_16LE)
-                
                 val topLines = text.lines().take(5)
                 val manifestLine = topLines.find { it.contains("<manifest") }
                 
@@ -153,24 +145,29 @@ val apkCleanupPatch = rawResourcePatch(
                 }
             }
         } catch (e: Exception) {
-            logger.warning("APK Cleanup: Failed to verify package from raw Manifest - ${e.message}")
+            logger.warning("APK Cleanup: Failed to verify package from Manifest - ${e.message}")
         }
 
         if (isExcludedApp) {
             logger.info("APK Cleanup: Detected protected package ($detectedPackage). Applying EXCLUDED_ROOT_CALLS and src/ protection rules.")
         }
-        // ==============================================
+        // ======================================================
 
         var removedFiles = 0
         var freedBytes = 0L
 
-        fun isProtected(relativePath: String) = PROTECTED_PATTERNS.any { it.matches(relativePath) }
+        // Nâng cấp hàm isProtected: thêm logic chặn EXCLUDED_ROOT_CALLS và thư mục src/
+        fun isProtected(relativePath: String): Boolean {
+            if (PROTECTED_PATTERNS.any { it.matches(relativePath) }) return true
+            if (isExcludedApp) {
+                if (EXCLUDED_ROOT_CALLS.contains(relativePath)) return true
+                if (relativePath.startsWith("src/")) return true
+            }
+            return false
+        }
 
         fun removeTree(path: String) {
-            // Chốt chặn ngay cửa: Nếu app thuộc diện bảo kê và nằm trong list hoặc thuộc thư mục src/ thì cấm xoá
-            if (isExcludedApp && (EXCLUDED_ROOT_CALLS.contains(path) || path.startsWith("src/"))) return
-
-            val entry = get(path) // java.io.File
+            val entry = get(path)
             if (entry.isDirectory) {
                 val children = entry.list()
                 val preview = children?.take(5)?.joinToString()
@@ -178,10 +175,6 @@ val apkCleanupPatch = rawResourcePatch(
                 children?.forEach { child -> removeTree("$path/$child") }
             } else if (entry.isFile) {
                 if (isProtected(path)) return
-                
-                // Chốt chặn cho file con bên trong phòng hờ
-                if (isExcludedApp && (EXCLUDED_ROOT_CALLS.any { path.endsWith(it) } || path.startsWith("src/"))) return
-
                 val size = entry.length()
                 if (entry.delete()) {
                     removedFiles++
@@ -191,11 +184,10 @@ val apkCleanupPatch = rawResourcePatch(
                     logger.warning("APK Cleanup: failed to delete $path")
                 }
             } else {
-                logger.fine("APK Cleanup: $path -> neither file nor directory")
+                logger.info("APK Cleanup: $path -> neither file nor directory")
             }
         }
 
-        // 1. Quét tự động đệ quy bằng walkTopDown (API chuẩn của Morphe)
         apkRoot.walkTopDown()
             .filter { it.isFile }
             .toList()
@@ -204,9 +196,6 @@ val apkCleanupPatch = rawResourcePatch(
 
                 if (isProtected(relativePath)) return@forEach
                 if (EXCLUDED_PREFIXES.any { relativePath.startsWith(it) }) return@forEach
-                
-                // Áp dụng luật bảo kê cho file khi quét tự động (bao gồm cả các file trong src/ nếu là app bảo kê)
-                if (isExcludedApp && (EXCLUDED_ROOT_CALLS.contains(relativePath) || relativePath.startsWith("src/"))) return@forEach
 
                 if (JUNK_PATTERNS.any { it.matches(relativePath) }) {
                     val size = file.length()
@@ -218,20 +207,29 @@ val apkCleanupPatch = rawResourcePatch(
                 }
             }
 
-        // 2. Gọi hàm removeTree gốc của Morphe (Đã được nâng cấp để né EXCLUDED_ROOT_CALLS)
-        try { removeTree("kotlin") } catch (e: Exception) { logger.severe("APK Cleanup: failed removing kotlin/ folder: ${e.message}") }
-        try { removeTree("assets/audience_network.dex") } catch (e: Exception) { logger.severe("APK Cleanup: failed removing assets/audience_network.dex: ${e.message}") }
-        
-        // 3. Bắn tỉa thư mục rác (JUNK_DIRECTORY_PREFIXES)
+        try {
+            removeTree("kotlin")
+        } catch (e: Exception) {
+            logger.severe("APK Cleanup: failed removing kotlin/ folder: ${e.message}")
+        }
+
+        try {
+            removeTree("assets/audience_network.dex")
+        } catch (e: Exception) {
+            logger.severe("APK Cleanup: failed removing assets/audience_network.dex: ${e.message}")
+        }
+
+        // === THÊM LOGIC XÓA JUNK_DIRECTORY_PREFIXES ===
         JUNK_DIRECTORY_PREFIXES.forEach { prefix ->
             try {
-                removeTree(prefix)
+                // Xóa slash ở cuối để tránh lỗi đường dẫn khi nạp vào removeTree
+                removeTree(prefix.removeSuffix("/"))
             } catch (e: Exception) {
                 logger.warning("APK Cleanup: failed removing $prefix: ${e.message}")
             }
         }
+        // ===============================================
 
-        // 4. Xử lý META-INF
         try {
             val metaInf = get("META-INF")
             if (metaInf.isDirectory) {
@@ -248,12 +246,10 @@ val apkCleanupPatch = rawResourcePatch(
             logger.severe("APK Cleanup: failed scanning META-INF/: ${e.message}")
         }
 
-        // Dọn dẹp thư mục rỗng (Logic gốc của Morphe)
         apkRoot.walkBottomUp()
             .filter { it.isDirectory && it != apkRoot && it.listFiles()?.isEmpty() == true }
             .forEach { it.delete() }
 
-        // Xử lý giữ lại kiến trúc CPU (Split by Arch)
         if (splitByArch == true) {
             val archToKeep = targetArch ?: "arm64-v8a"
             val libDir = get("lib")

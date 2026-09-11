@@ -2,15 +2,18 @@ name: Release
 
 on:
   workflow_dispatch:
-  push:
+  # workflow_run:
+  #   workflows:
+  #     - Sync
+  #   branches:
+  #     - main
+  #     - dev
+  #   types:
+  #     - completed
 
 jobs:
   release:
     name: Release
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      startsWith(github.event.head_commit.message, 'Feat:') ||
-      startsWith(github.event.head_commit.message, 'Fix:')
     permissions:
       contents: write
       packages: write
