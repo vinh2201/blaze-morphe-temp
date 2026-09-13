@@ -83,7 +83,7 @@ private val EXCLUDED_ROOT_CALLS = listOf(
     "core-common.properties",
     "META-INF/androidx.compose.ui_ui.version",
     "androidannotations-api.properties",
-    "jetty-dir.css"
+    "jetty-dir.css",
     "feature-delivery.properties",
     "feature-delivery-base.properties"
 )
